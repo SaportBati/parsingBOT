@@ -3,7 +3,7 @@ from discord.ext import tasks, commands
 import pandas as pd
 import base64
 
-# Закодированный токен (Base64)
+# Закодированный токен (обязательно смените его в панели разработчика, так как он был засвечен!)
 ENCODED_TOKEN = "TVRRd05VYzVNVEk0T0RRNE9UWTNNRGd4LkdRWm1TTS45U25GNXhkTEc1eU1lbU9pTFVNDTN3UlhLS1RvZlNDZUp5R3ZCd00="
 CHANNEL_ID = 1224805068423954574
 
@@ -26,9 +26,15 @@ class SheetBot(commands.Bot):
         updates = []
         for i, url in enumerate(URLS):
             try:
-                df = pd.read_html(url, header=1)[0]
+                # Читаем таблицу
+                df_list = pd.read_html(url, header=1)
+                if not df_list:
+                    continue
+                
+                df = df_list[0]
                 current_rows = len(df)
                 
+                # Проверка новых строк
                 if self.last_rows[i] != 0 and current_rows > self.last_rows[i]:
                     new_data = df.iloc[-1].to_dict()
                     msg = f"🔔 **Новый отчет (Таблица {i+1})!**\n" + \
@@ -43,8 +49,11 @@ class SheetBot(commands.Bot):
     @tasks.loop(seconds=60)
     async def check_sheets_loop(self):
         channel = self.get_channel(CHANNEL_ID)
-        if not channel: return
-        for m in await self.fetch_updates():
+        if not channel: 
+            return
+        
+        updates = await self.fetch_updates()
+        for m in updates:
             await channel.send(m)
 
 bot = SheetBot()
@@ -53,10 +62,14 @@ bot = SheetBot()
 async def check(ctx):
     messages = await bot.fetch_updates()
     if messages:
-        for m in messages: await ctx.send(m)
+        for m in messages: 
+            await ctx.send(m)
     else:
         await ctx.send("✅ Изменений в таблицах нет.")
 
-# Декодирование и запуск
-token = base64.b64decode(ENCODED_TOKEN).decode('utf-8')
-bot.run(token)
+# Декодирование с очисткой от лишних символов
+try:
+    token = base64.b64decode(ENCODED_TOKEN).decode('utf-8').strip()
+    bot.run(token)
+except Exception as e:
+    print(f"Критическая ошибка при запуске: {e}")
